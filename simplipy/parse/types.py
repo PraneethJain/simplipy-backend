@@ -1,6 +1,7 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Iterator
+from collections.abc import Sequence
 
 
 class Instruction(ABC):
@@ -31,21 +32,24 @@ class Statement(ABC):
         self.parent = block
 
 
-class Block:
+class Block(Sequence):
     def __init__(self, stmts: list[Statement]) -> None:
         self.stmts = stmts
 
     def first(self) -> int:
-        return self.stmts[0].first()
+        return self[0].first()
 
     def last(self) -> int:
-        return self.stmts[-1].last()
+        return self[-1].last()
 
     def _add_stmt(self, stmt: Statement) -> None:
         self.stmts.append(stmt)
 
     def set_parent(self, stmt: Statement) -> None:
         self.parent = stmt
+
+    def __getitem__(self, i) -> Statement:
+        return self.stmts[i]
 
     def __iter__(self) -> Iterator[Statement]:
         return iter(self.stmts)

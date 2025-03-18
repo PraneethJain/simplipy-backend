@@ -25,15 +25,15 @@ def next(stmt: Statement) -> Statement:
         else:
             return next(block.parent)
     else:
-        return block.stmts[stmt_num + 1]
+        return block[stmt_num + 1]
 
 
 def true(stmt: Statement) -> Statement:
     if isinstance(stmt, WhileStmt):
-        return stmt.block.stmts[0]
+        return stmt.block[0]
 
     if isinstance(stmt, IfStmt):
-        return stmt.if_block.stmts[0]
+        return stmt.if_block[0]
 
     raise ValueError(f"true control transfer function not defined for {stmt}")
 
@@ -43,6 +43,6 @@ def false(stmt: Statement) -> Statement:
         return next(stmt)
 
     if isinstance(stmt, IfStmt):
-        return stmt.else_block.stmts[0]
+        return stmt.else_block[0]
 
     raise ValueError(f"true control transfer function not defined for {stmt}")
