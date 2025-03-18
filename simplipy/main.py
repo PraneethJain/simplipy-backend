@@ -13,4 +13,8 @@ pgm = visitor.parse_pgm(tree)
 
 state = State(pgm)
 
-print(state._instr_map)
+print(state.ctfs)
+
+while True:
+    print(state.e, state.k)
+    state.step()

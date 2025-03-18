@@ -1,5 +1,21 @@
 from simplipy.parse.types import Instruction, Block, Program
 from simplipy.parse.statement import IfStmt, DefStmt, WhileStmt
+from simplipy.parse.instruction import (
+    IfInstr,
+    DefInstr,
+    RetInstr,
+    PassInstr,
+    BreakInstr,
+    WhileInstr,
+    GlobalInstr,
+    ContinueInstr,
+    NonlocalInstr,
+    CallAssignInstr,
+    ExprAssignInstr,
+)
+from simplipy.ctf.ctf import get_ctfs
+from simplipy.semantics.types import Bottom, Closure, Context
+import ast
 
 GLOBAL_ENV_ID = 0
 
@@ -13,24 +29,21 @@ class LexicalMap:
         self.envs[new_env_id] = {}
         return new_env_id
 
+    def __str__(self) -> str:
+        return str(self.envs)
+
 
 class ParentChain:
     def __init__(self) -> None:
-        self.edges: set[tuple[int, int]] = set()
+        self.edges: dict[int, int] = {}
 
     def add_edge(self, child: int, parent: int) -> None:
-        self.edges.add((child, parent))
-
-
-class Context:
-    def __init__(self, lineno: int, env_id: int) -> None:
-        self.lineno = lineno
-        self.env_id = env_id
+        self.edges[child] = parent
 
 
 class Continuation:
     def __init__(self, pgm: Program) -> None:
-        self.stack: list[Context] = [(pgm.block.first(), GLOBAL_ENV_ID)]
+        self.stack: list[Context] = [Context(pgm.block.first(), GLOBAL_ENV_ID)]
 
     def top(self) -> Context:
         return self.stack[-1]
@@ -41,24 +54,204 @@ class Continuation:
     def push(self, ctx: Context) -> None:
         self.stack.append(ctx)
 
+    def __str__(self) -> str:
+        return str(self.stack)
+
 
 class State:
     def __init__(self, pgm: Program) -> None:
         self.pgm = pgm
+        self.ctfs = get_ctfs(pgm)
 
         self.e = LexicalMap()
         self.p = ParentChain()
         self.k = Continuation(pgm)
 
-        self._instr_map: dict[int, Instruction] = {}
+        self.instr_map: dict[int, Instruction] = {}
         self._populate_instr_map(pgm.block)
 
     def step(self) -> None:
-        pass
+        instr = self.instr_map[self.k.top().lineno]
+
+        if isinstance(
+            instr, (PassInstr, BreakInstr, ContinueInstr, GlobalInstr, NonlocalInstr)
+        ):
+            self.k.top().lineno = self.ctfs["next"][self.k.top().lineno]
+        elif isinstance(instr, ExprAssignInstr):
+            env = self.lookup_env(instr.var)
+            val = self.eval_expr(instr.expr.node)
+            env[instr.var] = val
+            self.k.top().lineno = self.ctfs["next"][self.k.top().lineno]
+        elif isinstance(instr, (IfInstr, WhileInstr)):
+            if self.eval_expr(instr.expr.node):
+                self.k.top().lineno = self.ctfs["true"][self.k.top().lineno]
+            else:
+                self.k.top().lineno = self.ctfs["false"][self.k.top().lineno]
+        elif isinstance(instr, DefInstr):
+            func_stmt: DefStmt = instr.parent
+            closure = Closure(func_stmt.block.first(), instr.formals)
+            env = self.lookup_env(instr.func_var)
+            env[instr.func_var] = closure
+            self.k.top().lineno = self.ctfs["next"][self.k.top().lineno]
+        elif isinstance(instr, CallAssignInstr):
+            closure = self.lookup_val(instr.func_var)
+            if not isinstance(closure, Closure):
+                raise ValueError(f"Variable {instr.func_var} is not callable")
+            if len(instr.func_args) != len(closure.formals):
+                raise TypeError(
+                    f"{instr.func_var}() takes {len(closure.formals)} argument(s) but {len(instr.func_args)} were given`"
+                )
+
+            env_id = self.e.create_new_env()
+            env = self.e.envs[env_id]
+            for var, val in zip(
+                closure.formals,
+                map(self.eval_expr, [expr.node for expr in instr.func_args]),
+            ):
+                env[var] = val
+            for var in self.instr_map[closure.lineno].parent.parent.locals:
+                env[var] = Bottom()
+
+            self.p.add_edge(env_id, self.k.top().env_id)
+            self.k.push(Context(closure.lineno, env_id))
+
+        elif isinstance(instr, RetInstr):
+            val = self.eval_expr(instr.expr.node)
+            self.k.pop()
+            call_instr: CallAssignInstr = self.instr_map[self.k.top().lineno]
+            env = self.lookup_env(call_instr.var)
+            env[call_instr.var] = val
+            self.k.top().lineno = self.ctfs["next"][self.k.top().lineno]
+
+        else:
+            NotImplementedError(f"Unsupported instruction type: {type(instr).__name__}")
+
+    def get_parent_chain(self) -> list[int]:
+        current = self.k.top().env_id
+        result = [current]
+
+        while current in self.p.edges:
+            parent = self.p.edges[current]
+            result.append(parent)
+            current = parent
+
+        return result
+
+    def lookup_env(self, var: str) -> dict:
+        blk = self.instr_map[self.k.top().lineno].parent.parent
+        while not blk.lexical:
+            blk = blk.parent.parent
+
+        envs = [self.e.envs[env_id] for env_id in self.get_parent_chain()]
+
+        if var in blk.globals and var in blk.nonlocals:
+            raise ValueError(f"Variable {var} cannot be both nonlocal and global")
+        elif blk.parent is None or var in blk.globals:
+            return self.e.envs[GLOBAL_ENV_ID]
+        elif var in blk.nonlocals:
+            for env in envs[1:-1]:
+                if var in env:
+                    return env
+        else:
+            for env in envs:
+                if var in env:
+                    return env
+
+        raise LookupError(f"Failed to lookup {var}")
+
+    def lookup_val(self, var: str):
+        return self.lookup_env(var)[var]
+
+    def eval_expr(self, expr: ast.expr):
+        if isinstance(expr, ast.Constant):
+            return expr.value
+        elif isinstance(expr, ast.Name):
+            return self.lookup_val(expr.id)
+        elif isinstance(expr, ast.UnaryOp):
+            val = self.eval_expr(expr.operand)
+            if isinstance(expr.op, ast.USub):
+                return -val
+            elif isinstance(expr.op, ast.UAdd):
+                return +val
+            elif isinstance(expr.op, ast.Not):
+                return not val
+            elif isinstance(expr.op, ast.Invert):
+                return ~val
+            else:
+                raise ValueError(
+                    f"Unsupported unary operator: {type(expr.op).__name__}"
+                )
+        elif isinstance(expr, ast.BinOp):
+            left = self.eval_expr(expr.left)
+            right = self.eval_expr(expr.right)
+            if isinstance(expr.op, ast.Add):
+                return left + right
+            elif isinstance(expr.op, ast.Sub):
+                return left - right
+            elif isinstance(expr.op, ast.Mult):
+                return left * right
+            elif isinstance(expr.op, ast.Div):
+                return left / right
+            elif isinstance(expr.op, ast.FloorDiv):
+                return left // right
+            elif isinstance(expr.op, ast.Mod):
+                return left % right
+            elif isinstance(expr.op, ast.Pow):
+                return left**right
+            elif isinstance(expr.op, ast.LShift):
+                return left << right
+            elif isinstance(expr.op, ast.RShift):
+                return left >> right
+            elif isinstance(expr.op, ast.BitOr):
+                return left | right
+            elif isinstance(expr.op, ast.BitXor):
+                return left ^ right
+            elif isinstance(expr.op, ast.BitAnd):
+                return left & right
+            elif isinstance(expr.op, ast.MatMult):
+                return left @ right
+            else:
+                raise ValueError(
+                    f"Unsupported binary operator: {type(expr.op).__name__}"
+                )
+        elif isinstance(expr, ast.Compare):
+            left = self.eval_expr(expr.left)
+            for op, comparator in zip(expr.ops, expr.comparators):
+                right = self.eval_expr(comparator)
+                if isinstance(op, ast.Eq):
+                    result = left == right
+                elif isinstance(op, ast.NotEq):
+                    result = left != right
+                elif isinstance(op, ast.Lt):
+                    result = left < right
+                elif isinstance(op, ast.LtE):
+                    result = left <= right
+                elif isinstance(op, ast.Gt):
+                    result = left > right
+                elif isinstance(op, ast.GtE):
+                    result = left >= right
+                elif isinstance(op, ast.Is):
+                    result = left is right
+                elif isinstance(op, ast.IsNot):
+                    result = left is not right
+                elif isinstance(op, ast.In):
+                    result = left in right
+                elif isinstance(op, ast.NotIn):
+                    result = left not in right
+                else:
+                    raise ValueError(
+                        f"Unsupported comparison operator: {type(op).__name__}"
+                    )
+                if not result:
+                    return False
+                left = right
+            return True
+        else:
+            raise TypeError(f"Unsupported expression type: {type(expr).__name__}")
 
     def _populate_instr_map(self, blk: Block):
         for stmt in blk:
-            self._instr_map[stmt.first_instr().lineno] = stmt.first_instr()
+            self.instr_map[stmt.first_instr().lineno] = stmt.first_instr()
             if isinstance(stmt, IfStmt):
                 self._populate_instr_map(stmt.if_block)
                 self._populate_instr_map(stmt.else_block)
