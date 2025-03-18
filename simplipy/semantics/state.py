@@ -1,5 +1,5 @@
 from simplipy.parse.types import Instruction, Block, Program
-from simplipy.parse.statement import IfStmt, DefStmt, WhileStmt, RetStmt
+from simplipy.parse.statement import IfStmt, DefStmt, WhileStmt
 
 GLOBAL_ENV_ID = 0
 
