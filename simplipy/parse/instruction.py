@@ -41,10 +41,6 @@ class IfInstr(Instruction):
         self.expr = expr
 
 
-class ElseInstr(Instruction):
-    pass
-
-
 class WhileInstr(Instruction):
     def __init__(self, lineno: int, expr: Expression) -> None:
         super().__init__(lineno)

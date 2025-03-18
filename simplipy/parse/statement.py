@@ -4,7 +4,6 @@ from simplipy.parse.instruction import (
     ExprAssignInstr,
     CallAssignInstr,
     IfInstr,
-    ElseInstr,
     WhileInstr,
     DefInstr,
     RetInstr,
@@ -95,17 +94,14 @@ class IfStmt(Statement):
         self,
         if_instr: IfInstr,
         if_block: Block,
-        else_instr: ElseInstr,
         else_block: Block,
     ) -> None:
         self.if_instr = if_instr
         self.if_block = if_block
-        self.else_instr = else_instr
         self.else_block = else_block
 
         self.if_instr.set_parent(self)
         self.if_block.set_parent(self)
-        self.else_instr.set_parent(self)
         self.else_block.set_parent(self)
 
     def first(self) -> int:

@@ -33,8 +33,13 @@ class Statement(ABC):
 
 
 class Block(Sequence):
-    def __init__(self, stmts: list[Statement]) -> None:
+    def __init__(self, stmts: list[Statement], lexical: bool = False) -> None:
         self.stmts = stmts
+        self.lexical = lexical
+        if lexical:
+            self.locals: set[str] = set()
+            self.nonlocals: set[str] = set()
+            self.globals: set[str] = set()
 
     def first(self) -> int:
         return self[0].first()

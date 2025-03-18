@@ -19,7 +19,6 @@ from simplipy.parse.instruction import (
     IfInstr,
     DefInstr,
     RetInstr,
-    ElseInstr,
     PassInstr,
     BreakInstr,
     WhileInstr,
@@ -34,13 +33,24 @@ from simplipy.parse.types import Program
 
 class Visitor(ast.NodeVisitor):
     def __init__(self) -> None:
-        self.block_stack = [Block([])]
+        self.block_stack = [Block([], lexical=True)]
         self.block_stack[-1].set_parent(None)
 
     def _add_stmt(self, stmt: Statement) -> None:
         stmt.set_idx(len(self.block_stack[-1]))
         stmt.set_parent(self.block_stack[-1])
         self.block_stack[-1]._add_stmt(stmt)
+
+    def _encl_lexical_block(self) -> Block:
+        for blk in reversed(self.block_stack):
+            if blk.lexical:
+                return blk
+        raise LookupError("No enclosing lexical block found")
+
+    def _update_locals(self, var: str) -> None:
+        encl_lexical_block = self._encl_lexical_block()
+        if self.block_stack.index(encl_lexical_block) != 0:  # Not the top level block
+            encl_lexical_block.locals.add(var)
 
     def parse_pgm(self, tree: ast.AST) -> Program:
         self.visit(tree)
@@ -62,6 +72,7 @@ class Visitor(ast.NodeVisitor):
         if not isinstance(target, ast.Name):
             raise NotImplementedError("Only assignments to variables are supported")
         var = target.id
+        self._update_locals(var)
         value = node.value
         if isinstance(value, ast.Call):
             if not isinstance(value.func, ast.Name):
@@ -89,9 +100,8 @@ class Visitor(ast.NodeVisitor):
         for stmt_node in node.orelse:
             self.visit(stmt_node)
         else_block = self.block_stack.pop()
-        else_lineno = node.orelse[0].lineno if node.orelse else node.lineno
-        else_instr = ElseInstr(else_lineno)
-        if_stmt = IfStmt(if_instr, if_block, else_instr, else_block)
+
+        if_stmt = IfStmt(if_instr, if_block, else_block)
         self._add_stmt(if_stmt)
 
     def visit_While(self, node: ast.While) -> None:
@@ -116,8 +126,9 @@ class Visitor(ast.NodeVisitor):
 
     def visit_FunctionDef(self, node: ast.FunctionDef) -> None:
         formals = [arg.arg for arg in node.args.args]
+        self._update_locals(node.name)
         def_instr = DefInstr(node.lineno, node.name, formals)
-        self.block_stack.append(Block([]))
+        self.block_stack.append(Block([], lexical=True))
         for stmt_node in node.body:
             self.visit(stmt_node)
         func_block = self.block_stack.pop()
@@ -133,11 +144,13 @@ class Visitor(ast.NodeVisitor):
         self._add_stmt(stmt)
 
     def visit_Nonlocal(self, node: ast.Nonlocal) -> None:
+        self._encl_lexical_block().nonlocals.update(node.names)
         instr = NonlocalInstr(node.lineno, node.names)
         stmt = NonlocalStmt(instr)
         self._add_stmt(stmt)
 
     def visit_Global(self, node: ast.Global) -> None:
+        self._encl_lexical_block().globals.update(node.names)
         instr = GlobalInstr(node.lineno, node.names)
         stmt = GlobalStmt(instr)
         self._add_stmt(stmt)
