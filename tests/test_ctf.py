@@ -15,6 +15,7 @@ def test_ctf_simple():
 
     assert ctf_table == {
         "next": {
+            1: 7,
             2: 3,
             3: 4,
             7: 8,

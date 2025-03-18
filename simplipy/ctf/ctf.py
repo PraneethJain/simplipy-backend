@@ -5,7 +5,7 @@ from typing import Callable
 
 
 def construct_ctf(
-    stf: Callable[[Statement], Statement]
+    stf: Callable[[Statement], Statement],
 ) -> Callable[[Instruction], Instruction]:
     def ctf(instr: Instruction) -> Instruction:
         stmt = stf(instr.parent)
@@ -27,13 +27,16 @@ def get_ctfs(pgm: Program) -> dict[str, dict[int, int]]:
             if isinstance(stmt, IfStmt):
                 ctf_table["true"][stmt.first()] = true(stmt.if_instr).lineno
                 ctf_table["false"][stmt.first()] = false(stmt.if_instr).lineno
+                # ctf_table["next"][stmt.first()] = next(stmt.if_instr).lineno
                 visit_all_instrs(stmt.if_block)
                 visit_all_instrs(stmt.else_block)
             elif isinstance(stmt, WhileStmt):
                 ctf_table["true"][stmt.first()] = true(stmt.while_instr).lineno
                 ctf_table["false"][stmt.first()] = false(stmt.while_instr).lineno
+                # ctf_table["next"][stmt.first()] = next(stmt.while_instr).lineno
                 visit_all_instrs(stmt.block)
             elif isinstance(stmt, DefStmt):
+                ctf_table["next"][stmt.first()] = next(stmt.def_instr).lineno
                 visit_all_instrs(stmt.block)
             elif isinstance(stmt, RetStmt):
                 pass
