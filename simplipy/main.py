@@ -1,5 +1,7 @@
 from simplipy.parse.parse import Visitor
+from simplipy.semantics.state import State
 import ast
+from rich import print
 
 
 filename = "tests/test_files/a.py"
@@ -8,3 +10,7 @@ with open(filename, "r", encoding="utf-8") as f:
 
 visitor = Visitor()
 pgm = visitor.parse_pgm(tree)
+
+state = State(pgm)
+
+print(state._instr_map)
