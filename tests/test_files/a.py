@@ -20,5 +20,3 @@ while i < 10:
     else:
         i = i + 1
     continue
-
-pass

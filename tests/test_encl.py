@@ -11,7 +11,7 @@ def test_encl_while_simple():
 
     visitor = Visitor()
     pgm = visitor.parse_pgm(tree)
-    while_stmt = pgm.block.stmts[-2]
+    while_stmt = pgm.block.stmts[-1]
 
     for stmt in while_stmt.block.stmts:
         assert encl_while(stmt) == while_stmt
