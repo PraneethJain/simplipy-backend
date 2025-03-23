@@ -1,5 +1,6 @@
 from simplipy.parse.types import Instruction, Statement, Block
 from simplipy.parse.instruction import (
+    DoneInstr,
     PassInstr,
     ExprAssignInstr,
     CallAssignInstr,
@@ -12,6 +13,21 @@ from simplipy.parse.instruction import (
     GlobalInstr,
     NonlocalInstr,
 )
+
+
+class DoneStatement(Statement):
+    def __init__(self, instr: DoneInstr) -> None:
+        self.instr = instr
+        self.instr.set_parent(self)
+
+    def first(self) -> int:
+        return self.instr.lineno
+
+    def last(self) -> int:
+        return self.instr.lineno
+
+    def first_instr(self) -> Instruction:
+        return self.instr
 
 
 class GlobalStmt(Statement):

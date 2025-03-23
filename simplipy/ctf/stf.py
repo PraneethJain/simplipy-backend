@@ -5,7 +5,9 @@ from simplipy.parse.statement import (
     BreakStmt,
     WhileStmt,
     ContinueStmt,
+    DoneStatement,
 )
+from simplipy.parse.instruction import DoneInstr
 from simplipy.ctf.helper import encl_while
 
 
@@ -21,7 +23,7 @@ def next(stmt: Statement) -> Statement:
 
     if stmt_num == len(block) - 1:
         if block.parent is None:  # Top level block
-            return stmt  # Fixed point
+            return DoneStatement(DoneInstr(stmt.last() + 1))
         else:
             return next(block.parent)
     else:

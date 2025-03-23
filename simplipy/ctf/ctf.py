@@ -47,4 +47,7 @@ def get_ctfs(pgm: Program) -> dict[str, dict[int, int]]:
 
     visit_all_instrs(pgm.block)
 
+    # reached the end of execution, and is a fixed point
+    ctf_table["next"][pgm.block.last() + 1] = pgm.block.last() + 1
+
     return ctf_table

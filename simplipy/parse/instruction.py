@@ -2,6 +2,10 @@ from simplipy.parse.expression import Expression
 from simplipy.parse.types import Instruction
 
 
+class DoneInstr(Instruction):
+    pass
+
+
 class PassInstr(Instruction):
     pass
 
