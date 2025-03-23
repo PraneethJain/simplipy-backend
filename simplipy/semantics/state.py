@@ -71,7 +71,8 @@ class State:
         self._populate_instr_map(pgm.block)
 
     def is_final(self) -> bool:
-        return self.ctfs["next"][self.k.top().lineno] == self.k.top().lineno
+        lineno = self.k.top().lineno
+        return lineno in self.ctfs["next"] and self.ctfs["next"][lineno] == lineno
 
     def as_dict(self) -> dict:
         return {
