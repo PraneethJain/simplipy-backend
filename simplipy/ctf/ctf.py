@@ -40,8 +40,6 @@ def get_ctfs(pgm: Program) -> dict[str, dict[int, int]]:
                 visit_all_instrs(stmt.block)
             elif isinstance(stmt, RetStmt):
                 pass
-            elif blk.parent is None and stmt.idx == len(blk) - 1:
-                pass
             else:
                 ctf_table["next"][stmt.first()] = next(stmt.first_instr()).lineno
 
