@@ -11,6 +11,11 @@ class Closure:
     def __repr__(self) -> str:
         return f"({self.lineno}, {self.formals})"
 
+    def __eq__(self, other: object) -> bool:
+        if not isinstance(other, Closure):
+            return NotImplemented
+        return self.lineno == other.lineno and self.formals == other.formals
+
 
 class Context:
     def __init__(self, lineno: int, env_id: int) -> None:
