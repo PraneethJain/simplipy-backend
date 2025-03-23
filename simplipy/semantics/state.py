@@ -70,6 +70,17 @@ class State:
         self.instr_map: dict[int, Instruction] = {}
         self._populate_instr_map(pgm.block)
 
+    def is_final(self) -> bool:
+        return self.ctfs["next"][self.k.top().lineno] == self.k.top().lineno
+
+    def as_dict(self) -> dict:
+        return {
+            "e": self.e.envs,
+            "p": self.p.edges,
+            "k": self.k.stack,
+            "ctfs": self.ctfs,
+        }
+
     def step(self) -> None:
         instr = self.instr_map[self.k.top().lineno]
 
