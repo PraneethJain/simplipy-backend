@@ -29,6 +29,15 @@ class LexicalMap:
         self.envs[new_env_id] = {}
         return new_env_id
 
+    def as_dict(self) -> dict:
+        res = {}
+        for k, v in self.envs.items():
+            if isinstance(v, Closure):
+                res[k] = {"lineno": v.lineno, "formals": v.formals}
+            else:
+                res[k] = v
+        return res
+
     def __str__(self) -> str:
         return str(self.envs)
 
@@ -44,6 +53,9 @@ class ParentChain:
 class Continuation:
     def __init__(self, pgm: Program) -> None:
         self.stack: list[Context] = [Context(pgm.block.first(), GLOBAL_ENV_ID)]
+
+    def as_dict(self) -> dict:
+        return [{"lineno": ctx.lineno, "env_id": ctx.env_id} for ctx in self.stack]
 
     def top(self) -> Context:
         return self.stack[-1]
@@ -76,9 +88,9 @@ class State:
 
     def as_dict(self) -> dict:
         return {
-            "e": self.e.envs,
+            "e": self.e.as_dict(),
             "p": self.p.edges,
-            "k": self.k.stack,
+            "k": self.k.as_dict(),
             "ctfs": self.ctfs,
         }
 
