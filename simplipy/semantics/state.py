@@ -31,11 +31,15 @@ class LexicalMap:
 
     def as_dict(self) -> dict:
         res = {}
-        for k, v in self.envs.items():
-            if isinstance(v, Closure):
-                res[k] = {"lineno": v.lineno, "formals": v.formals}
-            else:
-                res[k] = v
+        for env_id, env in self.envs.items():
+            res[env_id] = {}
+            for k, v in env.items():
+                if isinstance(v, Closure):
+                    res[env_id][k] = {"lineno": v.lineno, "formals": v.formals}
+                elif isinstance(v, Bottom):
+                    res[env_id][k] = "💀"
+                else:
+                    res[env_id][k] = v
         return res
 
     def __str__(self) -> str:
