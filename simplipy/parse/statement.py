@@ -129,6 +129,14 @@ class IfStmt(Statement):
     def first_instr(self) -> Instruction:
         return self.if_instr
 
+    def to_dict(self) -> dict:
+        data = super().to_dict()
+
+        data["if_block"] = self.if_block.to_dict()
+        data["else_block"] = self.else_block.to_dict()
+
+        return data
+
 
 class WhileStmt(Statement):
     def __init__(self, while_instr: WhileInstr, block: Block) -> None:
@@ -146,6 +154,13 @@ class WhileStmt(Statement):
 
     def first_instr(self) -> Instruction:
         return self.while_instr
+
+    def to_dict(self) -> dict:
+        data = super().to_dict()
+
+        data["block"] = self.block.to_dict()
+
+        return data
 
 
 class BreakStmt(Statement):
@@ -195,6 +210,14 @@ class DefStmt(Statement):
     def first_instr(self) -> Instruction:
         # Think about this later
         return self.def_instr
+
+    def to_dict(self) -> dict:
+        data = super().to_dict()
+
+        data["name"] = self.def_instr.func_var
+        data["block"] = self.block.to_dict()
+
+        return data
 
 
 class RetStmt(Statement):

@@ -28,6 +28,8 @@ class ProgramRequest(BaseModel):
 class SessionResponse(BaseModel):
     session_id: str
     initial_state: Dict
+    program_structure: Dict
+    ctf_table: Dict[str, Dict[int, int]]
 
 
 class StepResponse(BaseModel):
@@ -36,26 +38,40 @@ class StepResponse(BaseModel):
 
 
 @app.post("/api/program", response_model=SessionResponse)
-async def create_program(program: ProgramRequest):
+async def create_program_session(program_request: ProgramRequest):
     """
-    Create a new session with the provided code.
-    Returns the session ID and initial program state.
+    Parses code, creates a session, calculates CTFs, and returns initial state,
+    program structure, and CTFs.
     """
     try:
-        tree = ast.parse(program.code, filename=program.filename)
+        tree = ast.parse(program_request.code, filename=program_request.filename)
         visitor = Visitor()
         pgm = visitor.parse_pgm(tree)
 
         state = State(pgm)
+        initial_state_dict = state.as_dict()
+        program_structure_dict = pgm.to_dict()
+        ctf_table = state.ctfs
+
         session_id = str(uuid4())
         sessions[session_id] = state
-        initial_state = state.as_dict()
 
-        return {"session_id": session_id, "initial_state": initial_state}
+        return SessionResponse(
+            session_id=session_id,
+            initial_state=initial_state_dict,
+            program_structure=program_structure_dict,
+            ctf_table=ctf_table,
+        )
 
+    except SyntaxError as e:
+        raise HTTPException(status_code=400, detail=f"Syntax Error: {e}")
     except Exception as e:
+        import traceback
+
+        traceback.print_exc()
         raise HTTPException(
-            status_code=400, detail=f"Failed to parse program: {str(e)}"
+            status_code=500,
+            detail=f"Failed to initialize session: {type(e).__name__}: {e}",
         )
 
 
@@ -70,19 +86,22 @@ async def step_program(session_id: str):
     state = sessions[session_id]
 
     try:
-        if state.is_final():
-            return state.as_dict()
+        finished = state.is_final()
+        if not finished:
+            state.step()
+            finished = state.is_final()
 
-        state.step()
+        current_state_dict = state.as_dict()
 
-        current_state = state.as_dict()
-
-        return {
-            "state": current_state,
-            "finished": state.is_final(),
-        }
+        return StepResponse(
+            state=current_state_dict,
+            finished=finished,
+        )
 
     except Exception as e:
+        import traceback
+
+        traceback.print_exc()
         raise HTTPException(
             status_code=500, detail=f"Error during program execution: {e}"
         )
@@ -114,40 +133,42 @@ async def delete_session(session_id: str):
 
 
 @app.post("/api/reset/{session_id}")
-async def reset_session(session_id: str, program: Optional[ProgramRequest] = None):
+async def reset_session(
+    session_id: str, program_request: Optional[ProgramRequest] = None
+):
     """
-    Reset a session to its initial state or with new code.
+    Reset a session to its initial state, optionally with new code.
+    Returns the session ID, new initial state, program structure, and CTFs.
     """
     if session_id not in sessions:
         raise HTTPException(status_code=404, detail="Session not found")
 
-    if program:
-        try:
-            tree = ast.parse(program.code, filename=program.filename)
+    try:
+        if program_request:
+            tree = ast.parse(program_request.code, filename=program_request.filename)
             visitor = Visitor()
             pgm = visitor.parse_pgm(tree)
-            sessions[session_id] = State(pgm)
-        except Exception as e:
-            raise HTTPException(
-                status_code=400, detail=f"Failed to parse program: {str(e)}"
-            )
-    else:
-        try:
-            state = sessions[session_id]
-            pgm = state.pgm
-            sessions[session_id] = State(pgm)
-        except Exception as e:
-            raise HTTPException(
-                status_code=500, detail=f"Failed to reset session: {str(e)}"
-            )
+        else:
+            pgm = sessions[session_id].pgm
 
-    state = sessions[session_id]
-    initial_state = state.as_dict()
+        new_state = State(pgm)
+        new_initial_state_dict = new_state.as_dict()
+        new_program_structure_dict = pgm.to_dict()
+        new_ctf_table = new_state.ctfs
 
-    return {"session_id": session_id, "initial_state": initial_state}
+        sessions[session_id] = new_state
 
+        return SessionResponse(
+            session_id=session_id,
+            initial_state=new_initial_state_dict,
+            program_structure=new_program_structure_dict,
+            ctf_table=new_ctf_table,
+        )
 
-# if __name__ == "__main__":
-#     import uvicorn
+    except SyntaxError as e:
+        raise HTTPException(status_code=400, detail=f"Syntax Error: {e}")
+    except Exception as e:
+        import traceback
 
-#     uvicorn.run(app, host="0.0.0.0", port=8000)
+        traceback.print_exc()
+        raise HTTPException(status_code=500, detail=f"Failed to reset session: {e}")
