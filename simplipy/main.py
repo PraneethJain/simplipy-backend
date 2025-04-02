@@ -32,9 +32,16 @@ class SessionResponse(BaseModel):
     ctf_table: Dict[str, Dict[int, int]]
 
 
+class LastTransitionInfo(BaseModel):
+    from_line: int
+    to_line: int
+    ctf: str
+
+
 class StepResponse(BaseModel):
     state: Dict
     finished: bool
+    last_transition: Optional[LastTransitionInfo] = None
 
 
 @app.post("/api/program", response_model=SessionResponse)
@@ -84,6 +91,8 @@ async def step_program(session_id: str):
         raise HTTPException(status_code=404, detail="Session not found")
 
     state = sessions[session_id]
+    last_transition: Optional[LastTransitionInfo] = None
+    from_line = state.k.top().lineno
 
     try:
         finished = state.is_final()
@@ -92,10 +101,15 @@ async def step_program(session_id: str):
             finished = state.is_final()
 
         current_state_dict = state.as_dict()
+        to_line = state.k.top().lineno
+
+        if state.last_ctf_used is not None:
+            last_transition = LastTransitionInfo(
+                from_line=from_line, to_line=to_line, ctf=state.last_ctf_used
+            )
 
         return StepResponse(
-            state=current_state_dict,
-            finished=finished,
+            state=current_state_dict, finished=finished, last_transition=last_transition
         )
 
     except Exception as e:

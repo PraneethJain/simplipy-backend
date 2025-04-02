@@ -85,6 +85,7 @@ class State:
 
         self.instr_map: dict[int, Instruction] = {}
         self._populate_instr_map(pgm.block)
+        self.last_ctf_used: str | None = None
 
     def is_final(self) -> bool:
         lineno = self.k.top().lineno
@@ -101,26 +102,28 @@ class State:
     def step(self) -> None:
         instr = self.instr_map[self.k.top().lineno]
 
+        ctf_to_use = None
+
         if isinstance(
             instr, (PassInstr, BreakInstr, ContinueInstr, GlobalInstr, NonlocalInstr)
         ):
-            self.k.top().lineno = self.ctfs["next"][self.k.top().lineno]
+            ctf_to_use = "next"
         elif isinstance(instr, ExprAssignInstr):
             env = self.lookup_env(instr.var)
             val = self.eval_expr(instr.expr.node)
             env[instr.var] = val
-            self.k.top().lineno = self.ctfs["next"][self.k.top().lineno]
+            ctf_to_use = "next"
         elif isinstance(instr, (IfInstr, WhileInstr)):
             if self.eval_expr(instr.expr.node):
-                self.k.top().lineno = self.ctfs["true"][self.k.top().lineno]
+                ctf_to_use = "true"
             else:
-                self.k.top().lineno = self.ctfs["false"][self.k.top().lineno]
+                ctf_to_use = "false"
         elif isinstance(instr, DefInstr):
             func_stmt: DefStmt = instr.parent
             closure = Closure(func_stmt.block.first(), instr.formals)
             env = self.lookup_env(instr.func_var)
             env[instr.func_var] = closure
-            self.k.top().lineno = self.ctfs["next"][self.k.top().lineno]
+            ctf_to_use = "next"
         elif isinstance(instr, CallAssignInstr):
             closure = self.lookup_val(instr.func_var)
             if not isinstance(closure, Closure):
@@ -150,9 +153,12 @@ class State:
             env = self.lookup_env(call_instr.var)
             env[call_instr.var] = val
             self.k.top().lineno = self.ctfs["next"][self.k.top().lineno]
-
         else:
             NotImplementedError(f"Unsupported instruction type: {type(instr).__name__}")
+
+        if ctf_to_use is not None:
+            self.k.top().lineno = self.ctfs[ctf_to_use][self.k.top().lineno]
+            self.last_ctf_used = ctf_to_use
 
     def get_parent_chain(self) -> list[int]:
         current = self.k.top().env_id
