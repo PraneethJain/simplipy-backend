@@ -4,6 +4,7 @@ from pydantic import BaseModel
 from typing import Dict, Optional
 import ast
 from simplipy.parse.parse import Visitor
+from simplipy.simplify.simplify import simplify_python_code
 from simplipy.semantics.state import State
 from uuid import uuid4
 
@@ -42,6 +43,35 @@ class StepResponse(BaseModel):
     state: Dict
     finished: bool
     last_transition: Optional[LastTransitionInfo] = None
+
+
+class SimplifyRequest(BaseModel):
+    code: str
+
+
+class SimplifyResponse(BaseModel):
+    simplified_code: str
+
+
+@app.post("/api/simplify", response_model=SimplifyResponse)
+async def simplify_code_endpoint(request: SimplifyRequest):
+    """
+    Takes Python code as input and attempts to simplify it into the
+    subset supported by the SimpliPy interpreter.
+    """
+    try:
+        simplified_code = simplify_python_code(request.code)
+        return SimplifyResponse(simplified_code=simplified_code)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception as e:
+        import traceback
+
+        traceback.print_exc()
+        raise HTTPException(
+            status_code=500,
+            detail=f"An internal server error occurred during simplification: {e}",
+        )
 
 
 @app.post("/api/program", response_model=SessionResponse)
