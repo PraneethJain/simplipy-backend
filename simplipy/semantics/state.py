@@ -35,7 +35,11 @@ class LexicalMap:
             res[env_id] = {}
             for k, v in env.items():
                 if isinstance(v, Closure):
-                    res[env_id][k] = {"lineno": v.lineno, "formals": v.formals}
+                    res[env_id][k] = {
+                        "lineno": v.lineno,
+                        "formals": v.formals,
+                        "par_env_id": v.par_env_id,
+                    }
                 elif isinstance(v, Bottom):
                     res[env_id][k] = "💀"
                 else:
@@ -120,7 +124,9 @@ class State:
                 ctf_to_use = "false"
         elif isinstance(instr, DefInstr):
             func_stmt: DefStmt = instr.parent
-            closure = Closure(func_stmt.block.first(), instr.formals)
+            closure = Closure(
+                func_stmt.block.first(), instr.formals, self.k.top().env_id
+            )
             env = self.lookup_env(instr.func_var)
             env[instr.func_var] = closure
             ctf_to_use = "next"
@@ -143,7 +149,7 @@ class State:
             for var in self.instr_map[closure.lineno].parent.parent.locals:
                 env[var] = Bottom()
 
-            self.p.add_edge(env_id, self.k.top().env_id)
+            self.p.add_edge(env_id, closure.par_env_id)
             self.k.push(Context(closure.lineno, env_id))
 
         elif isinstance(instr, RetInstr):
