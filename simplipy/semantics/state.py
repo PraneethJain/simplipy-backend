@@ -146,7 +146,9 @@ class State:
                 map(self.eval_expr, [expr.node for expr in instr.func_args]),
             ):
                 env[var] = val
-            for var in self.instr_map[closure.lineno].parent.parent.locals:
+            blk = self.instr_map[closure.lineno].parent.parent
+            blk_locals = blk.locals - blk.nonlocals - blk.globals
+            for var in blk_locals:
                 env[var] = Bottom()
 
             self.p.add_edge(env_id, closure.par_env_id)
