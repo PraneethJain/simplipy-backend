@@ -21,5 +21,5 @@ def test_run_simple():
         "i": 11,
         "y": 742,
         "z": 752,
-        "f": Closure(2, ["x", "y"]),
+        "f": Closure(2, ["x", "y"], 0),
     }
