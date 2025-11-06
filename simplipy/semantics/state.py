@@ -22,7 +22,7 @@ GLOBAL_ENV_ID = 0
 
 class LexicalMap:
     def __init__(self) -> None:
-        self.envs: dict[id, dict] = {GLOBAL_ENV_ID: {}}
+        self.envs: dict[int, dict] = {GLOBAL_ENV_ID: {}}
 
     def create_new_env(self) -> int:
         new_env_id = max(self.envs.keys()) + 1
@@ -62,7 +62,7 @@ class Continuation:
     def __init__(self, pgm: Program) -> None:
         self.stack: list[Context] = [Context(pgm.block.first(), GLOBAL_ENV_ID)]
 
-    def as_dict(self) -> dict:
+    def as_dict(self) -> list:
         return [{"lineno": ctx.lineno, "env_id": ctx.env_id} for ctx in self.stack]
 
     def top(self) -> Context:
